@@ -8,7 +8,7 @@ import (
 	"github.com/khuirulhuda/agy-switch/internal/service"
 )
 
-const version = "1.0.0"
+const version = "0.0.1"
 
 func main() {
 	keyringStorage := adapter.NewSystemKeyring(adapter.DefaultServiceName)
