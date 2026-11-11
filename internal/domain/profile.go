@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var (
@@ -30,9 +31,12 @@ type TokenPayload struct {
 
 // Profile represents a named account configuration.
 type Profile struct {
-	Name    string
-	Email   string
-	RawData string
+	Name       string    `json:"name"`
+	Email      string    `json:"email"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	Active     bool      `json:"active"`
+	RawData    string    `json:"-"`
 }
 
 // ValidateProfileName validates that a profile name conforms to safe naming standards.

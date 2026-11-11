@@ -1,7 +1,9 @@
 package service_test
 
 import (
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/khuirulhuda/agy-switch/internal/adapter"
@@ -259,5 +261,95 @@ func TestLogoutActive_Success(t *testing.T) {
 	_, err = storage.Get(service.ActiveAccountKey)
 	if err == nil {
 		t.Errorf("expected active account to be deleted from keyring")
+	}
+}
+
+func TestSaveProfileRejectsOverwriteAndForceAllowsIt(t *testing.T) {
+	storage := adapter.NewMemoryKeyring()
+	svc := service.NewProfileService(storage)
+	_ = storage.Set(service.ActiveAccountKey, sampleRawToken)
+	if _, err := svc.SaveProfile("personal"); err != nil {
+		t.Fatal(err)
+	}
+	_ = storage.Set(service.ActiveAccountKey, secondRawToken)
+	if _, err := svc.SaveProfile("personal"); !errors.Is(err, service.ErrProfileExists) {
+		t.Fatalf("expected duplicate protection, got %v", err)
+	}
+	if _, err := svc.SaveProfileForce("personal"); err != nil {
+		t.Fatal(err)
+	}
+	profiles, err := svc.ListProfiles()
+	if err != nil || len(profiles) != 1 || profiles[0].Email != "work@company.com" {
+		t.Fatalf("force did not replace profile: %+v, %v", profiles, err)
+	}
+}
+
+func TestRenameProfileMovesTokenAndMetadata(t *testing.T) {
+	storage := adapter.NewMemoryKeyring()
+	svc := service.NewProfileService(storage)
+	_ = storage.Set(service.ActiveAccountKey, sampleRawToken)
+	if _, err := svc.SaveProfile("old"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RenameProfile("old", "new"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SwitchProfile("old"); !errors.Is(err, service.ErrProfileNotFound) {
+		t.Fatalf("old profile still exists: %v", err)
+	}
+	profile, err := svc.SwitchProfile("new")
+	if err != nil || profile.Email != "test@example.com" {
+		t.Fatalf("renamed profile unavailable: %v", err)
+	}
+}
+
+func TestListProfilesMarksOnlyMatchingActiveToken(t *testing.T) {
+	storage := adapter.NewMemoryKeyring()
+	svc := service.NewProfileService(storage)
+	_ = storage.Set(service.ActiveAccountKey, sampleRawToken)
+	_, _ = svc.SaveProfile("personal")
+	_ = storage.Set(service.ActiveAccountKey, `{"id_token_email":"unmatched@example.com"}`)
+	profiles, err := svc.ListProfiles()
+	if err != nil || len(profiles) != 1 {
+		t.Fatalf("unexpected profiles: %+v, %v", profiles, err)
+	}
+	if profiles[0].Active {
+		t.Fatal("unmatched active token was marked active")
+	}
+}
+
+func TestLegacyRegistryMigratesToMetadata(t *testing.T) {
+	storage := adapter.NewMemoryKeyring()
+	svc := service.NewProfileService(storage)
+	_ = storage.Set(service.RegistryAccountKey, `["legacy"]`)
+	_ = storage.Set(service.ProfilePrefix+"legacy", sampleRawToken)
+	profiles, err := svc.ListProfiles()
+	if err != nil || len(profiles) != 1 {
+		t.Fatalf("legacy registry was not loaded: %+v, %v", profiles, err)
+	}
+	if profiles[0].CreatedAt.IsZero() {
+		t.Fatal("legacy profile did not receive created_at metadata")
+	}
+	var migrated map[string]any
+	raw, _ := storage.Get(service.RegistryAccountKey)
+	if json.Unmarshal([]byte(raw), &migrated) != nil || migrated["version"] == nil {
+		t.Fatalf("registry was not migrated: %s", raw)
+	}
+}
+
+func TestDoctorReportsBrokenProfileWithoutExposingToken(t *testing.T) {
+	storage := adapter.NewMemoryKeyring()
+	svc := service.NewProfileService(storage)
+	_ = storage.Set(service.RegistryAccountKey, `{"version":1,"profiles":{"broken":{"created_at":"2024-01-01T00:00:00Z"}}}`)
+	_ = storage.Set(service.ProfilePrefix+"broken", "not-json")
+
+	report := svc.Doctor(func() (string, error) { return "/usr/bin/agy", nil })
+	if report.OK {
+		t.Fatal("expected doctor to report a broken profile")
+	}
+	for _, diagnostic := range report.Diagnostics {
+		if strings.Contains(diagnostic.Message, "not-json") {
+			t.Fatal("doctor leaked token contents")
+		}
 	}
 }

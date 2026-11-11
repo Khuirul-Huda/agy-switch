@@ -4,7 +4,7 @@
 
 **Kakas baris perintah (CLI) yang cepat, aman, dan tanpa overhead untuk berganti multi-profil akun pada Antigravity CLI (`agy`).**
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go)](https://golang.org)
 [![Platform](https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-555555?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Khuirul-Huda/agy-switch)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20Hexagonal-8A2BE2?style=for-the-badge)](https://github.com/Khuirul-Huda/agy-switch)
 [![Tests](https://img.shields.io/badge/Tests-Hermetic%20In--Memory-brightgreen?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/Khuirul-Huda/agy-switch)
@@ -101,7 +101,27 @@ Jalankan alur onboarding untuk login melalui `agy` dan menyimpan sesi yang dihas
 ```bash
 agy-switch new
 ```
-Perintah ini meminta nama profil, menghapus sesi aktif, menjalankan `agy` untuk login interaktif, lalu menyimpan sesi baru setelah `agy` selesai dengan sukses.
+Perintah ini meminta nama profil, menghapus sesi aktif, menjalankan `agy` untuk login interaktif, lalu menyimpan sesi baru setelah `agy` selesai dengan sukses. Untuk penggunaan non-interaktif, gunakan `agy-switch new work`. Jika login gagal, Anda dapat mencoba lagi; jika dibatalkan, sesi sebelumnya dipulihkan.
+
+### 5. Ekspor profil secara aman
+Ekspor dilindungi password dan dienkripsi AES-GCM. Token tidak pernah ditulis sebagai teks polos:
+```bash
+agy-switch export profiles.agy
+agy-switch import profiles.agy
+agy-switch import profiles.agy --force
+```
+Kedua perintah meminta password. Berkas ekspor dibuat dengan mode `0600`; simpan password secara terpisah.
+
+Untuk CI atau skrip, gunakan variabel lingkungan `AGY_SWITCH_PASSWORD`. Jika nilainya tidak kosong, variabel ini dipakai dan memiliki prioritas atas prompt; nilainya tidak pernah dicetak atau dimasukkan ke JSON. Karena variabel lingkungan dapat terlihat oleh proses lain pada sebagian sistem, gunakan penyimpanan secret CI yang terlindungi.
+
+### 6. Memeriksa masalah konfigurasi
+
+```bash
+agy-switch doctor
+agy-switch doctor --json
+```
+
+Doctor memeriksa akses OS Keyring, ketersediaan `agy` di `PATH`, validitas registry, dan setiap token profil. Hasilnya berisi saran perbaikan tanpa mencetak isi token.
 
 ---
 
@@ -133,7 +153,7 @@ Ubah nama `agy-switch-windows-amd64.exe` menjadi `agy-switch.exe` dan masukkan k
 
 ---
 
-### Kompilasi dari Source (Membutuhkan Go 1.21+)
+### Kompilasi dari Source (Membutuhkan Go 1.26+)
 
 ```bash
 git clone git@github.com:Khuirul-Huda/agy-switch.git
@@ -154,13 +174,22 @@ cp bin/agy-switch ~/.local/bin/
 |---|---|---|
 | `agy-switch` | — | Membuka menu interaktif pemilihan profil |
 | `agy-switch current` | — | Menampilkan email akun yang sedang aktif di `agy` |
-| `agy-switch save <nama>` | — | Menyimpan sesi aktif ke profil bernama |
+| `agy-switch current --quiet` | — | Mengecek sesi aktif tanpa output saat berhasil |
+| `agy-switch current --json` | — | Menghasilkan JSON stabil (`{"email":"..."}`) atau error terstruktur; exit non-zero saat gagal |
+| `agy-switch save <nama>` | — | Menyimpan sesi aktif; tidak menimpa profil yang sudah ada |
+| `agy-switch save <nama> --force` | — | Menimpa profil secara eksplisit |
 | `agy-switch switch <nama>` | — | Mengaktifkan profil tersimpan ke `agy` |
 | `agy-switch <profil>` | — | Bentuk singkat dari `agy-switch switch <profil>` |
-| `agy-switch new` | — | Login melalui `agy` lalu menyimpan sesi sebagai profil baru |
-| `agy-switch list` | `ls` | Menampilkan tabel profil yang tersimpan |
+| `agy-switch new [<nama>]` | — | Login melalui `agy` lalu menyimpan sesi sebagai profil baru |
+| `agy-switch list` | `ls` | Menampilkan profil dan metadata dalam tabel |
+| `agy-switch list --json` | — | Menampilkan JSON metadata tanpa token |
+| `agy-switch doctor [--json]` | — | Memeriksa dependensi dan integritas profil |
+| `agy-switch rename <lama> <baru>` | — | Memindahkan token dan metadata ke nama baru |
 | `agy-switch delete <nama>` | `rm` | Menghapus profil dari OS Keyring |
 | `agy-switch logout` | — | Menghapus sesi aktif agar `agy` meminta login baru |
+| `agy-switch export <berkas>` | — | Membuat ekspor terenkripsi dengan password |
+| `agy-switch import <berkas>` | — | Mengimpor ekspor terenkripsi; `--force` untuk mengganti nama |
+| `agy-switch completion <shell>` | — | Membuat completion bash, zsh, fish, atau PowerShell |
 | `agy-switch version` | `-v` | Menampilkan informasi versi |
 | `agy-switch help` | `-h` | Menampilkan bantuan penggunaan |
 
@@ -187,12 +216,14 @@ cp bin/agy-switch ~/.local/bin/
           Namespace: service = "gemini"
           • Active Token : username = "antigravity"
           • Saved Profile: username = "antigravity:profile:<name>"
-          • Registry     : username = "antigravity:_profiles"
+          • Registry     : username = "antigravity:_profiles" (hanya metadata)
 ```
 
 1. **Keamanan Bawaan OS:** Token dilindungi oleh password login sistem operasi / modul PAM / autentikasi biometrik.
 2. **Auto-Refresh OAuth Standar:** Saat berpindah ke profil lama yang *access token*-nya telah kedaluwarsa, `agy` akan memanfaatkan `refresh_token` di dalam profil tersebut untuk meminta token baru dari server Google secara otomatis.
 3. **Hermetis & Aman:** Kakas ini tidak menyentuh database histori atau berkas proyek lokal, melainkan hanya menukar *pointer* kredensial sesi aktif.
+4. **Metadata tanpa rahasia:** Registry menyimpan nama profil serta waktu `created_at`/`last_used_at`; token tetap hanya di OS Keyring. Registry lama berbentuk array JSON akan dimigrasikan otomatis.
+5. **Penulisan bersamaan yang aman:** Mutasi profil dan registry menggunakan process lock lintas platform per pengguna. Berkas ekspor ditulis melalui berkas sementara lalu atomic rename; impor memvalidasi seluruh payload sebelum mengubah keyring dan mengembalikan perubahan parsial jika gagal.
 
 ---
 
@@ -222,6 +253,8 @@ Seluruh pengujian unit berjalan di atas `MemoryKeyring` di memori RAM dan **sama
 ```bash
 go test -v -race ./...
 ```
+
+Pengujian menggunakan keyring, filesystem, clock, dan pembaca password injeksi di memori, sehingga tidak membutuhkan OS Keyring asli atau terminal interaktif.
 
 ---
 

@@ -4,7 +4,7 @@
 
 **A sleek, secure, zero-overhead multi-account profile switcher for Antigravity CLI (`agy`).**
 
-[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=for-the-badge&logo=go)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=for-the-badge&logo=go)](https://golang.org)
 [![Platform](https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-555555?style=for-the-badge&logo=linux&logoColor=white)](https://github.com/Khuirul-Huda/agy-switch)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20Hexagonal-8A2BE2?style=for-the-badge)](https://github.com/Khuirul-Huda/agy-switch)
 [![Tests](https://img.shields.io/badge/Tests-Hermetic%20In--Memory-brightgreen?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/Khuirul-Huda/agy-switch)
@@ -102,7 +102,27 @@ Run the onboarding flow to sign in with `agy` and save the resulting session:
 ```bash
 agy-switch new
 ```
-The command asks for a profile name, clears the active session, launches `agy` for interactive sign-in, and saves the new session after `agy` exits successfully.
+The command asks for a profile name, clears the active session, launches `agy` for interactive sign-in, and saves the new session after `agy` exits successfully. You can also use `agy-switch new work` in scripts. Failed sign-ins can be retried; abandoning the flow restores the previous session.
+
+### 5. Export profiles securely
+Exports are authenticated and encrypted with AES-GCM using a password-derived key. Tokens are never written as plaintext:
+```bash
+agy-switch export profiles.agy
+agy-switch import profiles.agy
+agy-switch import profiles.agy --force
+```
+Both commands prompt for the password. Export files are created with mode `0600`; keep the password separate from the file.
+
+For CI or scripting, set `AGY_SWITCH_PASSWORD`. When this variable is non-empty it takes precedence over the prompt; it is never printed or included in JSON output. Environment variables can be visible to other processes on some systems, so prefer a protected secret store in CI.
+
+### 6. Diagnose setup problems
+
+```bash
+agy-switch doctor
+agy-switch doctor --json
+```
+
+The doctor checks OS keyring access, whether `agy` is available on `PATH`, registry validity, and every saved profile token. It reports remediation hints and never prints token contents.
 
 ---
 
@@ -134,7 +154,7 @@ Rename `agy-switch-windows-amd64.exe` to `agy-switch.exe` and place it in your `
 
 ---
 
-### Build From Source (Requires Go 1.21+)
+### Build From Source (Requires Go 1.26+)
 
 ```bash
 git clone git@github.com:Khuirul-Huda/agy-switch.git
@@ -170,13 +190,22 @@ GOOS=windows GOARCH=amd64 go build -o bin/agy-switch-windows-amd64.exe main.go
 |---|---|---|
 | `agy-switch` | — | Opens interactive selection menu |
 | `agy-switch current` | — | Shows the currently active account email |
-| `agy-switch save <name>` | — | Saves the active `agy` token as a named profile |
+| `agy-switch current --quiet` | — | Checks the active session without printing on success |
+| `agy-switch current --json` | — | Emits stable JSON (`{"email":"..."}`) or a structured error; exits non-zero on failure |
+| `agy-switch save <name>` | — | Saves the active token; refuses to overwrite an existing profile |
+| `agy-switch save <name> --force` | — | Explicitly replaces an existing profile |
 | `agy-switch switch <name>` | — | Activates a saved profile for `agy` sessions |
 | `agy-switch <profile>` | — | Shorthand for `agy-switch switch <profile>` |
-| `agy-switch new` | — | Signs in with `agy` and saves the session as a new profile |
-| `agy-switch list` | `ls` | Displays all saved profiles in a clean formatted table |
+| `agy-switch new [<name>]` | — | Signs in with `agy` and saves the session as a new profile |
+| `agy-switch list` | `ls` | Displays profiles and metadata in a table |
+| `agy-switch list --json` | — | Emits metadata-only JSON (no token fields) |
+| `agy-switch doctor [--json]` | — | Checks dependencies and profile integrity |
+| `agy-switch rename <old> <new>` | — | Moves a profile token and metadata to a new name |
 | `agy-switch delete <name>` | `rm` | Deletes a saved profile from the OS Keyring |
 | `agy-switch logout` | — | Clears the active session to trigger a fresh sign-in |
+| `agy-switch export <file>` | — | Creates a password-protected encrypted export |
+| `agy-switch import <file>` | — | Imports an encrypted export; use `--force` to replace names |
+| `agy-switch completion <shell>` | — | Generates bash, zsh, fish, or PowerShell completion |
 | `agy-switch version` | `-v` | Displays current version |
 | `agy-switch help` | `-h` | Shows usage information |
 
@@ -203,12 +232,14 @@ GOOS=windows GOARCH=amd64 go build -o bin/agy-switch-windows-amd64.exe main.go
           Namespace: service = "gemini"
           • Active Token : username = "antigravity"
           • Saved Profile: username = "antigravity:profile:<name>"
-          • Registry     : username = "antigravity:_profiles"
+          • Registry     : username = "antigravity:_profiles" (metadata only)
 ```
 
 1. **Native OS Isolation:** Tokens are protected by your operating system login password / PAM module / biometric auth.
 2. **Standard OAuth Refresh:** When switching to an older profile whose 1-hour access token has expired, `agy` uses the profile's embedded `refresh_token` to seamlessly fetch a fresh access token from Google servers.
 3. **Hermetic & Safe:** Does not touch internal code databases or model caches, only the credential pointer read by `agy` on startup.
+4. **Metadata without secrets:** The registry stores profile names and `created_at`/`last_used_at` timestamps. Tokens remain only in the OS keyring. Older registries containing a JSON array of names are migrated automatically.
+5. **Safe concurrent writes:** profile and registry mutations use a per-user cross-platform process lock. Export files are written with a temporary file and atomic rename; imports validate the complete encrypted payload before changing the keyring and roll back partial writes.
 
 ---
 
@@ -238,6 +269,8 @@ During automated tests, **the real system OS Keyring is NEVER touched**. All tes
 ```bash
 go test -v -race ./...
 ```
+
+The test suite injects an in-memory keyring, filesystem, clock, and password reader, so it does not require a real OS keyring or interactive terminal.
 
 ---
 
