@@ -24,7 +24,9 @@ jobs:
           cache: true
       - name: Check formatting
         shell: bash
-        run: test -z "$(git ls-files '*.go' -z | xargs -0 gofmt -l)"
+        run: |
+          gofmt -w $(git ls-files '*.go')
+          git diff --exit-code -- '*.go'
       - run: go test -v -race ./...
       - run: go vet ./...
       - run: go build ./...
