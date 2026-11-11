@@ -91,7 +91,17 @@ agy-switch
 # Atau perintah langsung:
 agy-switch switch work
 agy-switch switch personal
+
+# Bentuk singkat:
+agy-switch work
 ```
+
+### 4. Membuat profil baru
+Jalankan alur onboarding untuk login melalui `agy` dan menyimpan sesi yang dihasilkan:
+```bash
+agy-switch new
+```
+Perintah ini meminta nama profil, menghapus sesi aktif, menjalankan `agy` untuk login interaktif, lalu menyimpan sesi baru setelah `agy` selesai dengan sukses.
 
 ---
 
@@ -146,6 +156,8 @@ cp bin/agy-switch ~/.local/bin/
 | `agy-switch current` | — | Menampilkan email akun yang sedang aktif di `agy` |
 | `agy-switch save <nama>` | — | Menyimpan sesi aktif ke profil bernama |
 | `agy-switch switch <nama>` | — | Mengaktifkan profil tersimpan ke `agy` |
+| `agy-switch <profil>` | — | Bentuk singkat dari `agy-switch switch <profil>` |
+| `agy-switch new` | — | Login melalui `agy` lalu menyimpan sesi sebagai profil baru |
 | `agy-switch list` | `ls` | Menampilkan tabel profil yang tersimpan |
 | `agy-switch delete <nama>` | `rm` | Menghapus profil dari OS Keyring |
 | `agy-switch logout` | — | Menghapus sesi aktif agar `agy` meminta login baru |

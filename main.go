@@ -3,12 +3,15 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/khuirulhuda/agy-switch/internal/adapter"
 	"github.com/khuirulhuda/agy-switch/internal/service"
 )
 
 const version = "0.0.1"
+
+var agyRunner = runAgy
 
 func main() {
 	keyringStorage := adapter.NewSystemKeyring(adapter.DefaultServiceName)
@@ -32,6 +35,8 @@ func main() {
 		handleSave(profileService, ui, args[1:])
 	case "switch":
 		handleSwitch(profileService, ui, args[1:])
+	case "new":
+		handleNew(profileService, ui, agyRunner)
 	case "list", "ls":
 		handleList(profileService, ui)
 	case "delete", "rm":
@@ -43,6 +48,10 @@ func main() {
 	case "help", "-h", "--help":
 		printUsage()
 	default:
+		if len(args) == 1 {
+			handleSwitch(profileService, ui, args)
+			return
+		}
 		ui.Error("Unknown command: '%s'. Run 'agy-switch help' for usage instructions.", subcommand)
 		os.Exit(1)
 	}
@@ -83,6 +92,42 @@ func handleSwitch(svc *service.ProfileService, ui *adapter.UI, args []string) {
 		return
 	}
 	ui.Success("Successfully switched to profile '%s' (%s)!", profile.Name, profile.Email)
+}
+
+func handleNew(svc *service.ProfileService, ui *adapter.UI, runAgy func() error) {
+	name, err := ui.PromptProfileName()
+	if err != nil {
+		ui.Error("Failed to read profile name: %v", err)
+		return
+	}
+
+	exists, err := svc.ProfileExists(name)
+	if err != nil {
+		ui.Error("Invalid profile name: %v", err)
+		return
+	}
+	if exists {
+		ui.Error("Profile '%s' already exists. Choose another name.", name)
+		return
+	}
+
+	if err := svc.LogoutActive(); err != nil {
+		ui.Error("Failed to clear the active session: %v", err)
+		return
+	}
+
+	ui.Info("Starting agy for a new sign-in...")
+	if err := runAgy(); err != nil {
+		ui.Error("agy sign-in failed: %v", err)
+		return
+	}
+
+	profile, err := svc.SaveProfile(name)
+	if err != nil {
+		ui.Error("Failed to save the new profile: %v", err)
+		return
+	}
+	ui.Success("Profile '%s' (%s) successfully created!", profile.Name, profile.Email)
 }
 
 func handleList(svc *service.ProfileService, ui *adapter.UI) {
@@ -130,8 +175,18 @@ func printUsage() {
 	fmt.Println("  agy-switch current              Display the email address of the currently active account")
 	fmt.Println("  agy-switch save <name>          Save the active agy session into a named profile")
 	fmt.Println("  agy-switch switch <name>        Activate a saved profile for agy sessions")
+	fmt.Println("  agy-switch <profile>            Shorthand for 'agy-switch switch <profile>'")
+	fmt.Println("  agy-switch new                   Sign in with agy and save the session as a new profile")
 	fmt.Println("  agy-switch list                 List all saved profiles in a formatted table")
 	fmt.Println("  agy-switch delete <name>        Delete a saved profile from the OS Keyring")
 	fmt.Println("  agy-switch logout               Clear the active session to trigger a fresh agy sign-in")
 	fmt.Println("  agy-switch version              Show version information")
+}
+
+func runAgy() error {
+	cmd := exec.Command("agy")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

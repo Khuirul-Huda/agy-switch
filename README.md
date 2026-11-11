@@ -92,7 +92,17 @@ agy-switch
 # Or directly via command:
 agy-switch switch work
 agy-switch switch personal
+
+# Shorthand:
+agy-switch work
 ```
+
+### 4. Create a new profile
+Run the onboarding flow to sign in with `agy` and save the resulting session:
+```bash
+agy-switch new
+```
+The command asks for a profile name, clears the active session, launches `agy` for interactive sign-in, and saves the new session after `agy` exits successfully.
 
 ---
 
@@ -162,6 +172,8 @@ GOOS=windows GOARCH=amd64 go build -o bin/agy-switch-windows-amd64.exe main.go
 | `agy-switch current` | — | Shows the currently active account email |
 | `agy-switch save <name>` | — | Saves the active `agy` token as a named profile |
 | `agy-switch switch <name>` | — | Activates a saved profile for `agy` sessions |
+| `agy-switch <profile>` | — | Shorthand for `agy-switch switch <profile>` |
+| `agy-switch new` | — | Signs in with `agy` and saves the session as a new profile |
 | `agy-switch list` | `ls` | Displays all saved profiles in a clean formatted table |
 | `agy-switch delete <name>` | `rm` | Deletes a saved profile from the OS Keyring |
 | `agy-switch logout` | — | Clears the active session to trigger a fresh sign-in |

@@ -163,6 +163,25 @@ func (s *ProfileService) ListProfiles() ([]domain.Profile, error) {
 	return profiles, nil
 }
 
+// ProfileExists reports whether a profile name is already registered.
+func (s *ProfileService) ProfileExists(name string) (bool, error) {
+	if err := domain.ValidateProfileName(name); err != nil {
+		return false, err
+	}
+
+	names, err := s.loadRegistry()
+	if err != nil {
+		return false, fmt.Errorf("failed to read profile registry: %w", err)
+	}
+
+	for _, existing := range names {
+		if existing == name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // DeleteProfile removes a saved profile from keyring and removes it from the registry.
 func (s *ProfileService) DeleteProfile(name string) error {
 	if err := domain.ValidateProfileName(name); err != nil {

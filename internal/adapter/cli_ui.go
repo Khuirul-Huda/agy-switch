@@ -3,6 +3,7 @@ package adapter
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -28,8 +29,13 @@ type UI struct {
 
 // NewUI initializes a new terminal UI instance.
 func NewUI() *UI {
+	return NewUIWithReader(os.Stdin)
+}
+
+// NewUIWithReader initializes a terminal UI with a custom input source.
+func NewUIWithReader(reader io.Reader) *UI {
 	return &UI{
-		reader: bufio.NewReader(os.Stdin),
+		reader: bufio.NewReader(reader),
 	}
 }
 
@@ -49,6 +55,16 @@ func (u *UI) Info(format string, args ...any) {
 func (u *UI) Error(format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintf(os.Stderr, "%s✗ %s%s\n", colorRed, msg, colorReset)
+}
+
+// PromptProfileName reads and trims a profile name from the terminal.
+func (u *UI) PromptProfileName() (string, error) {
+	fmt.Printf("Enter a name for the new profile: ")
+	input, err := u.reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(input), nil
 }
 
 // RenderProfilesTable displays formatted profile rows and marks the active profile.

@@ -154,6 +154,32 @@ func TestSwitchProfile_NotFound(t *testing.T) {
 	}
 }
 
+func TestProfileExists(t *testing.T) {
+	storage := adapter.NewMemoryKeyring()
+	svc := service.NewProfileService(storage)
+
+	_ = storage.Set(service.ActiveAccountKey, sampleRawToken)
+	if _, err := svc.SaveProfile("personal"); err != nil {
+		t.Fatalf("failed to seed profile: %v", err)
+	}
+
+	exists, err := svc.ProfileExists("personal")
+	if err != nil {
+		t.Fatalf("unexpected error checking existing profile: %v", err)
+	}
+	if !exists {
+		t.Fatal("expected profile to exist")
+	}
+
+	exists, err = svc.ProfileExists("work")
+	if err != nil {
+		t.Fatalf("unexpected error checking missing profile: %v", err)
+	}
+	if exists {
+		t.Fatal("expected profile not to exist")
+	}
+}
+
 func TestListProfiles_EmptyAndPopulated(t *testing.T) {
 	// Arrange
 	storage := adapter.NewMemoryKeyring()
